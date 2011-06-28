@@ -36,6 +36,7 @@ int
 main(void)
 {
 	int sock;
+	char buf[1024];
 	/* int val; */
 	struct sockaddr_in6 sin6;
 	struct nd_router_advert nra;
@@ -63,7 +64,9 @@ main(void)
 	sin6.sin6_port = htons(IPPROTO_ICMPV6);
 	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &sin6.sin6_addr) == -1)
 		err(1, "inet_pton");
-	if (sendto(sock, &nra, sizeof(nra), 0, (struct sockaddr *)&sin6,
+	memcpy(buf, &nra, sizeof(nra));
+	memcpy(buf + sizeof(nra), &nopi, sizeof(nopi));
+	if (sendto(sock, buf, sizeof(nra) + sizeof(nopi), 0, (struct sockaddr *)&sin6,
 	    sizeof(sin6)) == -1)
 		err(1, "sendto");
 	
