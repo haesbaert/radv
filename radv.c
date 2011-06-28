@@ -85,8 +85,8 @@ main(int argc, char *argv[])
 	nopi.nd_opt_pi_prefix 	  = in6;
 	/* IPv6 */
 	bzero(&ip6, sizeof(ip6));
-	ip6.ip6_vfc = IPV6_VERSION & IPV6_VERSION_MASK;
-	ip6.ip6_nxt = IPPROTO_ICMPV6;
+	ip6.ip6_vfc  = IPV6_VERSION &	IPV6_VERSION_MASK;
+	ip6.ip6_nxt  = IPPROTO_ICMPV6;
 	ip6.ip6_plen = htons(sizeof(nra) + sizeof(nopi));
 	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &ip6.ip6_dst) != 1)
 		errx(1, "inet_pton");
@@ -100,13 +100,13 @@ main(int argc, char *argv[])
 		errx(1, "ether_aton");
 	memcpy(eh.ether_dhost, eha, ETHER_ADDR_LEN);
 	iov[0].iov_base = &eh;
-	iov[0].iov_len = sizeof(eh);
+	iov[0].iov_len	= sizeof(eh);
 	iov[1].iov_base = &ip6;
-	iov[1].iov_len = sizeof(ip6);
+	iov[1].iov_len	= sizeof(ip6);
 	iov[2].iov_base = &nra;
-	iov[2].iov_len = sizeof(nra);
+	iov[2].iov_len	= sizeof(nra);
 	iov[3].iov_base = &nopi;
-	iov[3].iov_len = sizeof(nopi);
+	iov[3].iov_len	= sizeof(nopi);
 	if ((writev(bpf, iov, 4)) == -1)
 		err(1, "write");
 	
