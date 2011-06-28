@@ -45,6 +45,19 @@
 
 extern char *__progname;
 
+struct pseudo_icmp_hdr {
+	struct in6_addr src;
+	struct in6_addr dst;
+	u_int16_t plen;
+	u_int8_t padding[3];
+	u_int8_t nxt;
+	struct nd_router_advert nra;
+	struct nd_opt_prefix_info nopi;
+};
+
+unsigned short in_cksum(unsigned short *, int);
+
+
 int
 main(int argc, char *argv[])
 {
@@ -56,6 +69,7 @@ main(int argc, char *argv[])
 	struct in6_addr in6;
 	struct nd_router_advert nra;
 	struct nd_opt_prefix_info nopi;
+	struct pseudo_icmp_hdr pih;
 	struct iovec iov[4];
 
 	if (argc != 3)
@@ -64,7 +78,7 @@ main(int argc, char *argv[])
 	if (inet_pton(AF_INET6, argv[2], &in6) != 1)
 		errx(1, "inet_pton");
 	/* Berkeley Packet Filter */
-	if ((bpf = open("/dev/bpf5", O_RDWR)) == -1)
+	if ((bpf = open("/dev/bpf4", O_RDWR)) == -1)
 		err(1, "open");
 	bzero(&ifreq, sizeof(ifreq));
 	(void)strlcpy(ifreq.ifr_name, argv[1], sizeof(ifreq.ifr_name));
@@ -74,7 +88,7 @@ main(int argc, char *argv[])
 	bzero(&nra, sizeof(nra));
 	nra.nd_ra_type		  = ND_ROUTER_ADVERT;
 	nra.nd_ra_code		  = 0;
-	nra.nd_ra_cksum		  = htons(0x13c7);	/* XXX */
+	nra.nd_ra_cksum		  = 0;
 	nra.nd_ra_curhoplimit	  = 0;
 	nra.nd_ra_router_lifetime = 0xffff;
 	bzero(&nopi, sizeof(nopi));
@@ -88,10 +102,20 @@ main(int argc, char *argv[])
 	ip6.ip6_vfc  = IPV6_VERSION &	IPV6_VERSION_MASK;
 	ip6.ip6_nxt  = IPPROTO_ICMPV6;
 	ip6.ip6_plen = htons(sizeof(nra) + sizeof(nopi));
+	/* ip6.ip6_plen = htons(sizeof(nra)); */
 	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &ip6.ip6_dst) != 1)
 		errx(1, "inet_pton");
 	if (inet_pton(AF_INET6, IP6_ADDRESS, &ip6.ip6_src) != 1)
 		errx(1, "inet_pton");
+	/* Finish Icmp */
+	bzero(&pih, sizeof(pih));
+	pih.src	 = ip6.ip6_src;
+	pih.dst	 = ip6.ip6_dst;
+	pih.plen = ip6.ip6_plen;
+	pih.nxt	 = ip6.ip6_nxt;
+	pih.nra	 = nra;
+	pih.nopi = nopi;
+	nra.nd_ra_cksum = in_cksum((unsigned short *)&pih, sizeof(pih));
 	/* Ethernet */
 	bzero(&eh, sizeof(eh));
 	eh.ether_type = htons(ETHERTYPE_IPV6);
@@ -111,4 +135,36 @@ main(int argc, char *argv[])
 		err(1, "write");
 	
 	return (0);
+}
+
+unsigned short
+in_cksum(unsigned short *addr,int len)
+{
+        register int sum = 0;
+        u_short answer = 0;
+        register u_short *w = addr;
+        register int nleft = len;
+
+        /*
+         * Our algorithm is simple, using a 32 bit accumulator (sum), we add
+         * sequential 16 bit words to it, and at the end, fold back all the
+         * carry bits from the top 16 bits into the lower 16 bits.
+         */
+        while (nleft > 1)  {
+                sum += *w++;
+                nleft -= 2;
+        }
+
+        /* mop up an odd byte, if necessary */
+        if (nleft == 1) {
+                *(u_char *)(&answer) = *(u_char *)w ;
+                sum += answer;
+        }
+
+        /* add back carry outs from top 16 bits to low 16 bits */
+        sum = (sum >> 16) + (sum & 0xffff);     /* add hi 16 to low 16 */
+        sum += (sum >> 16);                     /* add carry */
+        answer = ~sum;                          /* truncate to 16 bits */
+	
+        return(answer);
 }
