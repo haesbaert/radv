@@ -70,22 +70,6 @@ main(int argc, char *argv[])
 	(void)strlcpy(ifreq.ifr_name, argv[1], sizeof(ifreq.ifr_name));
 	if (ioctl(bpf, BIOCSETIF, &ifreq) != 0)
 		err(1, "ioctl");
-	/* Ethernet */
-	bzero(&eh, sizeof(eh));
-	eh.ether_type = htons(ETHERTYPE_IPV6);
-	eha = ether_aton(ALL_LINKLOCAL_NODES_HW);
-	if (eha == NULL)
-		errx(1, "ether_aton");
-	memcpy(eh.ether_dhost, eha, ETHER_ADDR_LEN);
-	/* IPv6 */
-	bzero(&ip6, sizeof(ip6));
-	ip6.ip6_vfc = IPV6_VERSION & IPV6_VERSION_MASK;
-	ip6.ip6_nxt = IPPROTO_ICMPV6;
-	ip6.ip6_plen = htons(sizeof(nra) + sizeof(nopi));
-	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &ip6.ip6_dst) != 1)
-		errx(1, "inet_pton");
-	if (inet_pton(AF_INET6, IP6_ADDRESS, &ip6.ip6_src) != 1)
-		errx(1, "inet_pton");
 	/* ICMPv6 */
 	bzero(&nra, sizeof(nra));
 	nra.nd_ra_type		  = ND_ROUTER_ADVERT;
@@ -99,6 +83,22 @@ main(int argc, char *argv[])
 	nopi.nd_opt_pi_prefix_len = sizeof(struct in6_addr);
 	nopi.nd_opt_pi_valid_time = 0xffffffff;
 	nopi.nd_opt_pi_prefix 	  = in6;
+	/* IPv6 */
+	bzero(&ip6, sizeof(ip6));
+	ip6.ip6_vfc = IPV6_VERSION & IPV6_VERSION_MASK;
+	ip6.ip6_nxt = IPPROTO_ICMPV6;
+	ip6.ip6_plen = htons(sizeof(nra) + sizeof(nopi));
+	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &ip6.ip6_dst) != 1)
+		errx(1, "inet_pton");
+	if (inet_pton(AF_INET6, IP6_ADDRESS, &ip6.ip6_src) != 1)
+		errx(1, "inet_pton");
+	/* Ethernet */
+	bzero(&eh, sizeof(eh));
+	eh.ether_type = htons(ETHERTYPE_IPV6);
+	eha = ether_aton(ALL_LINKLOCAL_NODES_HW);
+	if (eha == NULL)
+		errx(1, "ether_aton");
+	memcpy(eh.ether_dhost, eha, ETHER_ADDR_LEN);
 	iov[0].iov_base = &eh;
 	iov[0].iov_len = sizeof(eh);
 	iov[1].iov_base = &ip6;
