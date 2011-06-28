@@ -78,7 +78,7 @@ main(int argc, char *argv[])
 	if (inet_pton(AF_INET6, argv[2], &in6) != 1)
 		errx(1, "inet_pton");
 	/* Berkeley Packet Filter */
-	if ((bpf = open("/dev/bpf4", O_RDWR)) == -1)
+	if ((bpf = open("/dev/bpf5", O_RDWR)) == -1)
 		err(1, "open");
 	bzero(&ifreq, sizeof(ifreq));
 	(void)strlcpy(ifreq.ifr_name, argv[1], sizeof(ifreq.ifr_name));
